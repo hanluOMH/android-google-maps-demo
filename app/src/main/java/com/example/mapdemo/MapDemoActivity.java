@@ -2,6 +2,7 @@ package com.example.mapdemo;
 
 import android.Manifest;
 import android.app.Dialog;
+import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Looper;
@@ -11,6 +12,8 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.DialogFragment;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -31,12 +34,8 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 
-import permissions.dispatcher.NeedsPermission;
-import permissions.dispatcher.RuntimePermissions;
-
 import static com.google.android.gms.location.LocationServices.getFusedLocationProviderClient;
 
-@RuntimePermissions
 public class MapDemoActivity extends AppCompatActivity {
 
     private SupportMapFragment mapFragment;
@@ -47,6 +46,7 @@ public class MapDemoActivity extends AppCompatActivity {
     private long FASTEST_INTERVAL = 5000; /* 5 secs */
 
     private final static String KEY_LOCATION = "location";
+    private static final int PERMISSION_REQUEST_CODE = 123;
 
     /*
      * Define a request code to send to Google Play services This code is
@@ -88,21 +88,44 @@ public class MapDemoActivity extends AppCompatActivity {
         if (map != null) {
             // Map is ready
             Toast.makeText(this, "Map Fragment was loaded properly!", Toast.LENGTH_SHORT).show();
-            MapDemoActivityPermissionsDispatcher.getMyLocationWithPermissionCheck(this);
-            MapDemoActivityPermissionsDispatcher.startLocationUpdatesWithPermissionCheck(this);
+            checkLocationPermission();
         } else {
             Toast.makeText(this, "Error - Map was null!!", Toast.LENGTH_SHORT).show();
         }
     }
 
+    private void checkLocationPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) 
+                != PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) 
+                != PackageManager.PERMISSION_GRANTED) {
+            
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION, 
+                               Manifest.permission.ACCESS_COARSE_LOCATION},
+                    PERMISSION_REQUEST_CODE);
+        } else {
+            getMyLocation();
+            startLocationUpdates();
+        }
+    }
+
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, 
+                                         @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        MapDemoActivityPermissionsDispatcher.onRequestPermissionsResult(this, requestCode, grantResults);
+        
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                getMyLocation();
+                startLocationUpdates();
+            } else {
+                Toast.makeText(this, "Location permission denied", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     @SuppressWarnings({"MissingPermission"})
-    @NeedsPermission({Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION})
     void getMyLocation() {
         map.setMyLocationEnabled(true);
         map.getUiSettings().setMyLocationButtonEnabled(true);
@@ -173,7 +196,10 @@ public class MapDemoActivity extends AppCompatActivity {
 
         displayLocation();
 
-        MapDemoActivityPermissionsDispatcher.startLocationUpdatesWithPermissionCheck(this);
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) 
+                == PackageManager.PERMISSION_GRANTED) {
+            startLocationUpdates();
+        }
     }
 
     private void displayLocation() {
@@ -187,7 +213,7 @@ public class MapDemoActivity extends AppCompatActivity {
         }
     }
 
-    @NeedsPermission({Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION})
+    @SuppressWarnings({"MissingPermission"})
     protected void startLocationUpdates() {
         mLocationRequest = new LocationRequest();
         mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
